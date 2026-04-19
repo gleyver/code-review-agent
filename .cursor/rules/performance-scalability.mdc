@@ -1,0 +1,10 @@
+---
+description: Performance e escalabilidade em backends Node.js
+alwaysApply: true
+---
+
+# Performance e escala
+
+- Preferir I/O **não bloqueante**; evitar abstrações desnecessárias.
+- **Cache** (ex.: Redis) quando houver leitura repetida e TTL claro.
+- **Consultas** paginadas; índices alinhados a filtros reais; evitar N+1.

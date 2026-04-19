@@ -1,0 +1,21 @@
+---
+description: Estratégia de testes unitários e de integração
+globs: "**/*.test.{ts,js},**/*.spec.{ts,js},**/__tests__/**/*.{ts,js},**/tests/**/*.{ts,js}"
+alwaysApply: false
+---
+
+# Testes
+
+## Unitários
+
+- Focar em **domain** e **application**.
+- Sem dependências externas reais; mockar **apenas portas** (interfaces).
+
+## Integração
+
+- Fluxo completo: borda (controller) → caso de uso → infraestrutura.
+- Preferir DB real ou testcontainer; cobrir sucesso, falhas e casos limite.
+
+## Cobertura
+
+- Priorizar **caminhos críticos e regras de negócio**, não métrica percentual vazia.

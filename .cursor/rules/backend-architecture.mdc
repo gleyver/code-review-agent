@@ -1,0 +1,38 @@
+---
+description: Arquitetura hexagonal, DDD e organização por domínio em backends Node.js
+alwaysApply: true
+---
+
+# Arquitetura (Hexagonal + DDD)
+
+## Camadas
+
+- **Domain**: regras de negócio; sem frameworks ou libs externas.
+- **Application**: casos de uso; orquestra o domínio via portas.
+- **Infrastructure**: DB, HTTP clients, filas — implementa portas.
+
+## DDD
+
+- Organizar por **domínio/bounded context**, não só por camada técnica.
+- Usar entidades, value objects, agregados; repositórios como **interfaces no domain**, implementação na infra.
+- Evitar modelo de domínio anêmico (lógica junto dos conceitos, não só DTOs).
+
+## Portas e adaptadores
+
+- Toda integração externa atrás de interface (porta): DB, APIs, messaging.
+
+## Estrutura sugerida
+
+```
+src/modules/<context>/
+  domain/
+  application/
+  infrastructure/
+  interfaces/
+```
+
+## Anti-padrões de camada
+
+- Lógica de negócio em controllers ou handlers HTTP.
+- Acesso direto a DB fora de repositórios/adapters.
+- Domain importando `express`, ORM, SDKs de terceiros.

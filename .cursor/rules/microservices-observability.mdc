@@ -1,0 +1,29 @@
+---
+description: Limites de microsserviços, resiliência e observabilidade
+alwaysApply: true
+---
+
+# Microsserviços e plataforma
+
+## Serviço
+
+- Banco **próprio** por serviço; deploy independente; contexto delimitado claro.
+- Evitar DB compartilhado entre serviços.
+
+## Comunicação
+
+- Preferir **assíncrono/event-driven** quando possível; HTTP para sincrono necessário.
+- Operações críticas: **idempotência** onde fizer sentido.
+
+## Resiliência
+
+- Timeouts explícitos; retry com política; circuit breaker em chamadas externas.
+
+## Observabilidade
+
+- Logs **estruturados** (JSON): `requestId`, `correlationId`, `userId` quando houver.
+- Métricas (ex.: Prometheus); tracing distribuído (ex.: OpenTelemetry).
+
+## Anti-padrões
+
+- Acoplamento forte entre serviços; ignorar tratamento de erros; classes deus; valores mágicos hardcoded sem constantes/config.

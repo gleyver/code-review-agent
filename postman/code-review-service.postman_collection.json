@@ -1,0 +1,350 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-code-review-service",
+    "name": "Code Review Service",
+    "description": "Testes das rotas do code-review-service: health, **Pipeline** (`POST /reviews/pull-request` — um contrato para CI de todos os SCMs) e webhooks nativos.\n\n**Variáveis da coleção** (aba Variables): ajuste `baseUrl`, IDs de PR/MR e nomes de repositório. Preencha `reviewServiceToken` se o servidor usar `REVIEW_SERVICE_TOKEN`.\n\n**GitHub (webhook)**: com `githubWebhookSecret` vazio, a assinatura não é enviada. Se preencher, o pré-request calcula `x-hub-signature-256` sobre o corpo **já com variáveis substituídas**.\n\n**GitLab (webhook)**: `gitlabWebhookSecret` / `x-gitlab-token`.\n\n**Azure DevOps (webhook)**: `azureDevOpsWebhookSecret` / `x-azure-webhook-token`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "reviewServiceToken", "value": "" },
+    { "key": "githubRepoFullName", "value": "acme/app" },
+    { "key": "githubPrNumber", "value": "42" },
+    { "key": "githubWebhookSecret", "value": "" },
+    { "key": "gitlabMrIid", "value": "7" },
+    { "key": "gitlabProjectId", "value": "12345" },
+    { "key": "gitlabPathWithNamespace", "value": "acme/app" },
+    { "key": "gitlabMrUrl", "value": "https://gitlab.com/acme/app/-/merge_requests/7" },
+    { "key": "gitlabWebhookSecret", "value": "" },
+    { "key": "bitbucketFullName", "value": "acme-workspace/app-repo" },
+    { "key": "bitbucketPrId", "value": "3" },
+    { "key": "adoOrg", "value": "acme-org" },
+    { "key": "adoProject", "value": "acme-project" },
+    { "key": "adoRepo", "value": "app-repo" },
+    { "key": "adoPullRequestId", "value": "12" },
+    {
+      "key": "adoRepositoryGuid",
+      "value": "00000000-0000-0000-0000-000000000000",
+      "description": "GUID do repositório no Azure DevOps (somente para o request com repository.id)"
+    },
+    { "key": "azureDevOpsWebhookSecret", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const t = pm.collectionVariables.get('reviewServiceToken');",
+          "if (t !== undefined && t !== null && String(t).trim() !== '') {",
+          "  pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + String(t).trim() });",
+          "} else {",
+          "  pm.request.headers.remove('Authorization');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Pipeline (POST /reviews/pull-request)",
+      "description": "Chamada unificada para pipelines: JSON com `provider`. Usa o mesmo `reviewServiceToken` da coleção (Authorization).",
+      "item": [
+        {
+          "name": "provider github",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"github\",\n  \"repositoryFullName\": \"{{githubRepoFullName}}\",\n  \"pullRequestNumber\": {{githubPrNumber}}\n}\n"
+            },
+            "url": "{{baseUrl}}/reviews/pull-request"
+          },
+          "response": []
+        },
+        {
+          "name": "provider gitlab",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"gitlab\",\n  \"projectId\": {{gitlabProjectId}},\n  \"mergeRequestIid\": {{gitlabMrIid}},\n  \"pathWithNamespace\": \"{{gitlabPathWithNamespace}}\"\n}\n"
+            },
+            "url": "{{baseUrl}}/reviews/pull-request"
+          },
+          "response": []
+        },
+        {
+          "name": "provider bitbucket",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"bitbucket\",\n  \"repositoryFullName\": \"{{bitbucketFullName}}\",\n  \"pullRequestId\": {{bitbucketPrId}}\n}\n"
+            },
+            "url": "{{baseUrl}}/reviews/pull-request"
+          },
+          "response": []
+        },
+        {
+          "name": "provider azure_devops",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"azure_devops\",\n  \"organization\": \"{{adoOrg}}\",\n  \"project\": \"{{adoProject}}\",\n  \"repositoryId\": \"{{adoRepo}}\",\n  \"pullRequestId\": {{adoPullRequestId}}\n}\n"
+            },
+            "url": "{{baseUrl}}/reviews/pull-request"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GitHub",
+      "item": [
+        {
+          "name": "POST webhooks/github — PR opened (mínimo)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const secret = pm.collectionVariables.get('githubWebhookSecret');",
+                  "const rawTemplate = pm.request.body.raw || '';",
+                  "const rawBody = pm.variables.replaceIn(rawTemplate);",
+                  "if (secret !== undefined && secret !== null && String(secret).trim() !== '') {",
+                  "  const hash = CryptoJS.HmacSHA256(rawBody, String(secret).trim()).toString(CryptoJS.enc.Hex);",
+                  "  pm.request.headers.upsert({ key: 'x-hub-signature-256', value: 'sha256=' + hash });",
+                  "} else {",
+                  "  pm.request.headers.remove('x-hub-signature-256');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-github-event", "value": "pull_request" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"opened\",\n  \"repository\": { \"full_name\": \"{{githubRepoFullName}}\" },\n  \"pull_request\": { \"number\": {{githubPrNumber}} }\n}\n"
+            },
+            "url": "{{baseUrl}}/webhooks/github"
+          },
+          "response": []
+        },
+        {
+          "name": "POST webhooks/github — PR opened (com html_url)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const secret = pm.collectionVariables.get('githubWebhookSecret');",
+                  "const rawTemplate = pm.request.body.raw || '';",
+                  "const rawBody = pm.variables.replaceIn(rawTemplate);",
+                  "if (secret !== undefined && secret !== null && String(secret).trim() !== '') {",
+                  "  const hash = CryptoJS.HmacSHA256(rawBody, String(secret).trim()).toString(CryptoJS.enc.Hex);",
+                  "  pm.request.headers.upsert({ key: 'x-hub-signature-256', value: 'sha256=' + hash });",
+                  "} else {",
+                  "  pm.request.headers.remove('x-hub-signature-256');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-github-event", "value": "pull_request" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"opened\",\n  \"repository\": { \"full_name\": \"{{githubRepoFullName}}\" },\n  \"pull_request\": {\n    \"number\": {{githubPrNumber}},\n    \"html_url\": \"https://github.com/{{githubRepoFullName}}/pull/{{githubPrNumber}}\"\n  }\n}\n"
+            },
+            "url": "{{baseUrl}}/webhooks/github"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GitLab",
+      "item": [
+        {
+          "name": "POST webhooks/gitlab — MR open (com object_attributes.url)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const s = pm.collectionVariables.get('gitlabWebhookSecret');",
+                  "if (s !== undefined && s !== null && String(s).trim() !== '') {",
+                  "  pm.request.headers.upsert({ key: 'x-gitlab-token', value: String(s).trim() });",
+                  "} else {",
+                  "  pm.request.headers.remove('x-gitlab-token');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-gitlab-event", "value": "Merge Request Hook" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"object_attributes\": {\n    \"iid\": {{gitlabMrIid}},\n    \"action\": \"open\",\n    \"url\": \"{{gitlabMrUrl}}\"\n  },\n  \"project\": {\n    \"id\": {{gitlabProjectId}},\n    \"path_with_namespace\": \"{{gitlabPathWithNamespace}}\"\n  }\n}\n"
+            },
+            "url": "{{baseUrl}}/webhooks/gitlab"
+          },
+          "response": []
+        },
+        {
+          "name": "POST webhooks/gitlab — MR open (payload mínimo, sem url)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const s = pm.collectionVariables.get('gitlabWebhookSecret');",
+                  "if (s !== undefined && s !== null && String(s).trim() !== '') {",
+                  "  pm.request.headers.upsert({ key: 'x-gitlab-token', value: String(s).trim() });",
+                  "} else {",
+                  "  pm.request.headers.remove('x-gitlab-token');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-gitlab-event", "value": "Merge Request Hook" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"object_attributes\": {\n    \"iid\": {{gitlabMrIid}},\n    \"action\": \"open\"\n  },\n  \"project\": {\n    \"id\": {{gitlabProjectId}},\n    \"path_with_namespace\": \"{{gitlabPathWithNamespace}}\"\n  }\n}\n"
+            },
+            "url": "{{baseUrl}}/webhooks/gitlab"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Bitbucket Cloud",
+      "item": [
+        {
+          "name": "POST webhooks/bitbucket — pullrequest:created (mínimo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-event-key", "value": "pullrequest:created" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"repository\": { \"full_name\": \"{{bitbucketFullName}}\" },\n  \"pullrequest\": { \"id\": {{bitbucketPrId}} }\n}\n"
+            },
+            "url": "{{baseUrl}}/webhooks/bitbucket"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Azure DevOps",
+      "item": [
+        {
+          "name": "POST webhooks/azure-devops — PR created (repository.url)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const s = pm.collectionVariables.get('azureDevOpsWebhookSecret');",
+                  "if (s !== undefined && s !== null && String(s).trim() !== '') {",
+                  "  pm.request.headers.upsert({ key: 'x-azure-webhook-token', value: String(s).trim() });",
+                  "} else {",
+                  "  pm.request.headers.remove('x-azure-webhook-token');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"git.pullrequest.created\",\n  \"resource\": {\n    \"pullRequestId\": {{adoPullRequestId}},\n    \"repository\": {\n      \"url\": \"https://dev.azure.com/{{adoOrg}}/{{adoProject}}/_git/{{adoRepo}}\"\n    }\n  }\n}\n"
+            },
+            "url": "{{baseUrl}}/webhooks/azure-devops"
+          },
+          "response": []
+        },
+        {
+          "name": "POST webhooks/azure-devops — PR created (repository.id)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const s = pm.collectionVariables.get('azureDevOpsWebhookSecret');",
+                  "if (s !== undefined && s !== null && String(s).trim() !== '') {",
+                  "  pm.request.headers.upsert({ key: 'x-azure-webhook-token', value: String(s).trim() });",
+                  "} else {",
+                  "  pm.request.headers.remove('x-azure-webhook-token');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"git.pullrequest.created\",\n  \"resource\": {\n    \"pullRequestId\": {{adoPullRequestId}},\n    \"repository\": {\n      \"id\": \"{{adoRepositoryGuid}}\"\n    }\n  }\n}\n"
+            },
+            "url": "{{baseUrl}}/webhooks/azure-devops"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

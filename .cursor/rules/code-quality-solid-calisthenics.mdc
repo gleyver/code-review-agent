@@ -1,0 +1,19 @@
+---
+description: SOLID e Object Calisthenics estritos para código backend
+alwaysApply: true
+---
+
+# Qualidade de código
+
+## SOLID
+
+- Uma responsabilidade por classe/função; preferir composição a herança profunda.
+
+## Object Calisthenics (estrito)
+
+- No máximo **um nível de indentação** por método (extrair funções).
+- **Sem else**; usar early return.
+- **Não envolver primitivos** sem significado — preferir value objects (Email, Money, PasswordHash).
+- Coleções de primeira classe (objeto que encapsula a coleção + comportamento).
+- Métodos **pequenos** (alvo ~10 linhas; extrair se crescer).
+- Evitar getters/setters **só para expor estado**; expor comportamento quando fizer sentido.

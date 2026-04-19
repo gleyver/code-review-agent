@@ -1,0 +1,24 @@
+---
+description: REST, HTTP e validação na borda da API (Node.js)
+alwaysApply: true
+---
+
+# API REST
+
+## HTTP
+
+- Métodos: GET, POST, PUT, PATCH, DELETE conforme semântica.
+- Status: 200, 201, 204, 400, 404, 409, 500 (e outros quando aplicável, com critério claro).
+
+## Recursos
+
+- Nomes substantivos: `/users`, `/orders/{id}` — **sem verbos** no path.
+
+## Validação
+
+- Validar entrada na **borda** (controller/handler) com schema (Zod, Joi, etc.).
+- Nunca confiar em input externo; tipos do TypeScript não substituem validação em runtime.
+
+## Controllers
+
+- Finos: mapear HTTP → DTO validado → caso de uso; sem regra de negócio.
