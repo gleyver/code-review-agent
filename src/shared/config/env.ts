@@ -12,6 +12,8 @@ const envSchema = z
     GITLAB_WEBHOOK_SECRET: z.string().optional(),
     BITBUCKET_USERNAME: z.string().optional(),
     BITBUCKET_APP_PASSWORD: z.string().optional(),
+    /** Segredo do webhook Bitbucket Cloud (HMAC SHA256 em x-hub-signature / x-hub-signature-256). Obrigatorio para POST /webhooks/bitbucket. */
+    BITBUCKET_WEBHOOK_SECRET: z.string().optional(),
     REVIEW_SERVICE_TOKEN: z.string().optional(),
     AZURE_DEVOPS_PAT: z.string().optional(),
     AZURE_DEVOPS_WEBHOOK_SECRET: z.string().optional(),

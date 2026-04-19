@@ -71,7 +71,7 @@ O router monta as rotas **na raiz** do app (sem prefixo `/api`): por exemplo `PO
 
 1. **Autenticação opcional**: se `REVIEW_SERVICE_TOKEN` estiver definido, as rotas `POST /webhooks/*` e **`POST /reviews/pull-request`** exigem `Authorization: Bearer <token>`.
 2. **Filtro por provedor** (somente webhooks): cabeçalhos e campos do JSON definem se o evento é aceito ou **ignorado** (`202`). O endpoint de **pipeline** não usa esses cabeçalhos; o corpo traz `provider` e identificadores da PR/MR.
-3. **Segredos de webhook** (somente `POST /webhooks/*`, quando configurados): GitHub (`x-hub-signature-256`), GitLab (`x-gitlab-token`), Azure DevOps (`x-azure-webhook-token`). Bitbucket não valida segredo no código atual.
+3. **Segredos de webhook** (obrigatórios em `POST /webhooks/*`): sem a variável de ambiente correspondente o servidor responde **`503`** (`webhook not configured`). GitHub: `GITHUB_WEBHOOK_SECRET` + `x-hub-signature-256`. GitLab: `GITLAB_WEBHOOK_SECRET` + `x-gitlab-token`. Bitbucket: `BITBUCKET_WEBHOOK_SECRET` + `x-hub-signature` ou `x-hub-signature-256` (HMAC SHA256 do corpo bruto). Azure DevOps: `AZURE_DEVOPS_WEBHOOK_SECRET` + `x-azure-webhook-token`.
 4. **Parse e validação Zod** do corpo; em falha → `400`.
 5. **Caso de uso**: obtém diff + `headSha` via adapter do SCM; em seguida chama os três agentes em **paralelo** (`Promise.all`).
 6. **Resposta `200`**: JSON com reviews, `headSha`, etc.
@@ -120,7 +120,7 @@ Valores padrão e comentários estão em **`.env.example`**. Copie para `.env` e
 | Variável | Descrição |
 |----------|-----------|
 | `GITHUB_TOKEN` | PAT para API REST (diff + comentários/review). Obrigatório ao processar webhook GitHub. |
-| `GITHUB_WEBHOOK_SECRET` | Se definido, exige cabeçalho `x-hub-signature-256: sha256=<HMAC-SHA256 do corpo bruto com este segredo>`. |
+| `GITHUB_WEBHOOK_SECRET` | **Obrigatório** para `POST /webhooks/github`: cabeçalho `x-hub-signature-256: sha256=<HMAC-SHA256 do corpo bruto>`. |
 
 ### GitLab
 
@@ -128,7 +128,7 @@ Valores padrão e comentários estão em **`.env.example`**. Copie para `.env` e
 |----------|-----------|
 | `GITLAB_TOKEN` | Token de API. Obrigatório ao processar webhook GitLab. |
 | `GITLAB_BASE_URL` | Base da API REST. Default `https://gitlab.com/api/v4`. Em self-managed, aponte para `https://<host>/api/v4`. Usada também para derivar a **URL web** da MR quando `object_attributes.url` não vier no payload (remove sufixo `/api/v4`). |
-| `GITLAB_WEBHOOK_SECRET` | Se definido, o cabeçalho `x-gitlab-token` deve ser idêntico. |
+| `GITLAB_WEBHOOK_SECRET` | **Obrigatório** para `POST /webhooks/gitlab`: cabeçalho `x-gitlab-token` idêntico a este valor. |
 
 ### Bitbucket Cloud
 
@@ -136,13 +136,14 @@ Valores padrão e comentários estão em **`.env.example`**. Copie para `.env` e
 |----------|-----------|
 | `BITBUCKET_USERNAME` | Usuário Bitbucket. |
 | `BITBUCKET_APP_PASSWORD` | App password com escopo ao repositório. Ambos obrigatórios ao processar webhook Bitbucket. |
+| `BITBUCKET_WEBHOOK_SECRET` | **Obrigatório** para `POST /webhooks/bitbucket`: mesmo segredo configurado no webhook no Bitbucket Cloud; validação HMAC (`x-hub-signature` / `x-hub-signature-256`). |
 
 ### Azure DevOps
 
 | Variável | Descrição |
 |----------|-----------|
 | `AZURE_DEVOPS_PAT` | PAT com permissões de leitura de código/repositório e para comentar no PR. |
-| `AZURE_DEVOPS_WEBHOOK_SECRET` | Se definido, exige `x-azure-webhook-token` igual. |
+| `AZURE_DEVOPS_WEBHOOK_SECRET` | **Obrigatório** para `POST /webhooks/azure-devops`: cabeçalho `x-azure-webhook-token` idêntico. |
 | `AZURE_DEVOPS_ORGANIZATION` | Fallback de organização se a URL do repositório no payload não trouxer org. |
 | `AZURE_DEVOPS_PROJECT` | Fallback de projeto. |
 
@@ -349,7 +350,7 @@ Webhooks nativos continuam disponíveis se preferir disparar o review na abertur
 | Cabeçalho | Valor esperado |
 |-----------|----------------|
 | `x-github-event` | `pull_request` |
-| `x-hub-signature-256` | Obrigatório **somente se** `GITHUB_WEBHOOK_SECRET` estiver definido: `sha256=` + hex do HMAC-SHA256 do **corpo bruto** com o segredo. |
+| `x-hub-signature-256` | Obrigatório: `sha256=` + hex do HMAC-SHA256 do **corpo bruto** com `GITHUB_WEBHOOK_SECRET`. |
 | `Authorization` | `Bearer <REVIEW_SERVICE_TOKEN>` se a variável estiver definida. |
 
 **Ações**: somente `action === "opened"` executa review; outras ações → `202` com `ignored`.
@@ -366,7 +367,7 @@ Webhooks nativos continuam disponíveis se preferir disparar o review na abertur
 | Cabeçalho | Valor esperado |
 |-----------|----------------|
 | `x-gitlab-event` | `Merge Request Hook` |
-| `x-gitlab-token` | Igual a `GITLAB_WEBHOOK_SECRET` quando esta estiver definida. |
+| `x-gitlab-token` | Deve ser igual a `GITLAB_WEBHOOK_SECRET`. |
 | `Authorization` | Bearer, se `REVIEW_SERVICE_TOKEN` estiver definido. |
 
 **Ações**: somente `object_attributes.action === "open"`.
@@ -384,7 +385,8 @@ Sem `object_attributes.url`, a URL da MR é montada com `GITLAB_BASE_URL` (deriv
 | Cabeçalho | Valor esperado |
 |-----------|----------------|
 | `x-event-key` | `pullrequest:created` |
-| `Authorization` | Bearer, se token de serviço configurado. |
+| `x-hub-signature` ou `x-hub-signature-256` | `sha256=` + HMAC-SHA256 do corpo bruto com `BITBUCKET_WEBHOOK_SECRET` (como no GitHub). |
+| `Authorization` | Bearer, se `REVIEW_SERVICE_TOKEN` estiver definido. |
 
 **JSON**:
 
@@ -398,7 +400,7 @@ Sem link HTML, usa-se `https://bitbucket.org/{full_name}/pull-requests/{id}`.
 
 | Cabeçalho | Valor esperado |
 |-----------|----------------|
-| `x-azure-webhook-token` | Igual a `AZURE_DEVOPS_WEBHOOK_SECRET` quando definida. |
+| `x-azure-webhook-token` | Deve ser igual a `AZURE_DEVOPS_WEBHOOK_SECRET`. |
 | `Authorization` | Bearer, se token de serviço configurado. |
 
 **JSON**:
@@ -479,48 +481,9 @@ curl -sS -X POST "$BASE/reviews/pull-request" \
   --data-binary '{"provider":"github","repositoryFullName":"acme/app","pullRequestNumber":42}'
 ```
 
-### GitHub (sem `GITHUB_WEBHOOK_SECRET`)
+Para testar o review **sem** webhook nativo do GitHub, use **`POST /reviews/pull-request`** (exemplo acima). A rota **`POST /webhooks/github`** exige sempre `GITHUB_WEBHOOK_SECRET` no servidor e o cabeçalho `x-hub-signature-256`.
 
-Com segredo **vazio**, a assinatura não é exigida (útil para testes locais).
-
-```bash
-BASE=http://localhost:3000
-AUTH=()
-
-curl -sS -X POST "$BASE/webhooks/github" \
-  "${AUTH[@]}" \
-  -H "Content-Type: application/json" \
-  -H "x-github-event: pull_request" \
-  --data-binary @- <<'JSON'
-{
-  "action": "opened",
-  "repository": { "full_name": "acme/app" },
-  "pull_request": { "number": 42 }
-}
-JSON
-```
-
-Com `html_url` opcional:
-
-```bash
-AUTH=()
-curl -sS -X POST "$BASE/webhooks/github" \
-  "${AUTH[@]}" \
-  -H "Content-Type: application/json" \
-  -H "x-github-event: pull_request" \
-  --data-binary @- <<'JSON'
-{
-  "action": "opened",
-  "repository": { "full_name": "acme/app" },
-  "pull_request": {
-    "number": 42,
-    "html_url": "https://github.com/acme/app/pull/42"
-  }
-}
-JSON
-```
-
-### GitHub (com `GITHUB_WEBHOOK_SECRET`)
+### GitHub — webhook com assinatura (`GITHUB_WEBHOOK_SECRET`)
 
 O HMAC deve ser calculado sobre os **mesmos bytes** enviados no corpo. Exemplo gravando o JSON em arquivo:
 
@@ -571,8 +534,6 @@ curl -sS -X POST "$BASE/webhooks/gitlab" \
 JSON
 ```
 
-Se `GITLAB_WEBHOOK_SECRET` **não** estiver definido, omita `x-gitlab-token`.
-
 Payload mínimo sem `object_attributes.url` (depende de `GITLAB_BASE_URL` correta, ex. `https://gitlab.com/api/v4`):
 
 ```bash
@@ -581,6 +542,7 @@ curl -sS -X POST "$BASE/webhooks/gitlab" \
   "${AUTH[@]}" \
   -H "Content-Type: application/json" \
   -H "x-gitlab-event: Merge Request Hook" \
+  -H "x-gitlab-token: SEU_GITLAB_WEBHOOK_SECRET" \
   --data-binary @- <<'JSON'
 {
   "object_attributes": { "iid": 7, "action": "open" },
@@ -591,20 +553,27 @@ JSON
 
 ### Bitbucket Cloud
 
+O corpo deve ser **exatamente** o mesmo ficheiro usado no HMAC (como no GitHub).
+
 ```bash
 BASE=http://localhost:3000
 AUTH=()
+SECRET="seu_segredo_bitbucket_webhook"
+BODY_FILE="$(mktemp)"
+trap 'rm -f "$BODY_FILE"' EXIT
+
+cat > "$BODY_FILE" <<'JSON'
+{"repository":{"full_name":"acme-workspace/app-repo"},"pullrequest":{"id":3}}
+JSON
+
+SIG_HEX=$(openssl dgst -sha256 -hmac "$SECRET" "$BODY_FILE" | awk '{print $NF}')
 
 curl -sS -X POST "$BASE/webhooks/bitbucket" \
   "${AUTH[@]}" \
   -H "Content-Type: application/json" \
   -H "x-event-key: pullrequest:created" \
-  --data-binary @- <<'JSON'
-{
-  "repository": { "full_name": "acme-workspace/app-repo" },
-  "pullrequest": { "id": 3 }
-}
-JSON
+  -H "x-hub-signature: sha256=$SIG_HEX" \
+  --data-binary @"$BODY_FILE"
 ```
 
 ### Azure DevOps
@@ -629,8 +598,6 @@ curl -sS -X POST "$BASE/webhooks/azure-devops" \
 }
 JSON
 ```
-
-Se `AZURE_DEVOPS_WEBHOOK_SECRET` estiver vazio, omita `x-azure-webhook-token`.
 
 ---
 
@@ -668,5 +635,5 @@ Em pipelines CI que não repassem o payload nativo, você pode disparar os mesmo
 ## Segurança em produção
 
 - Defina **`REVIEW_SERVICE_TOKEN`** se o endpoint for exposto à internet.
-- Configure os **segredos de webhook** por provedor.
+- Configure os **segredos de webhook** por provedor (sem eles, `POST /webhooks/*` responde **503**).
 - Mantenha **`EXPOSE_REVIEW_ERROR_DETAIL`** desligado em ambientes públicos para não vazar mensagens de erro internas.

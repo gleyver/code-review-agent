@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-code-review-service",
     "name": "Code Review Service",
-    "description": "Testes das rotas do code-review-service: health, **Pipeline** (`POST /reviews/pull-request` — um contrato para CI de todos os SCMs) e webhooks nativos.\n\n**Variáveis da coleção** (aba Variables): ajuste `baseUrl`, IDs de PR/MR e nomes de repositório. Preencha `reviewServiceToken` se o servidor usar `REVIEW_SERVICE_TOKEN`.\n\n**GitHub (webhook)**: com `githubWebhookSecret` vazio, a assinatura não é enviada. Se preencher, o pré-request calcula `x-hub-signature-256` sobre o corpo **já com variáveis substituídas**.\n\n**GitLab (webhook)**: `gitlabWebhookSecret` / `x-gitlab-token`.\n\n**Azure DevOps (webhook)**: `azureDevOpsWebhookSecret` / `x-azure-webhook-token`.",
+    "description": "Testes das rotas do code-review-service: health, **Pipeline** (`POST /reviews/pull-request`) e webhooks nativos.\n\n**Variáveis da coleção**: ajuste `baseUrl`, segredos de webhook (`githubWebhookSecret`, `gitlabWebhookSecret`, `bitbucketWebhookSecret`, `azureDevOpsWebhookSecret`) — **obrigatórios** nas rotas `POST /webhooks/*` no servidor. Preencha `reviewServiceToken` se usar `REVIEW_SERVICE_TOKEN`.\n\n**GitHub (webhook)**: com `githubWebhookSecret` definido, use um pré-request que calcule `x-hub-signature-256` sobre o corpo bruto (mesmos bytes do body).\n\n**GitLab / Azure**: cabeçalhos `x-gitlab-token` e `x-azure-webhook-token` iguais aos segredos.\n\n**Bitbucket**: HMAC em `x-hub-signature` ou `x-hub-signature-256` com `bitbucketWebhookSecret`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -18,6 +18,7 @@
     { "key": "gitlabWebhookSecret", "value": "" },
     { "key": "bitbucketFullName", "value": "acme-workspace/app-repo" },
     { "key": "bitbucketPrId", "value": "3" },
+    { "key": "bitbucketWebhookSecret", "value": "" },
     { "key": "adoOrg", "value": "acme-org" },
     { "key": "adoProject", "value": "acme-project" },
     { "key": "adoRepo", "value": "app-repo" },

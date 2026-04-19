@@ -52,6 +52,7 @@ export function buildCodeReviewRouter(): Router {
     reviewServiceToken: env.REVIEW_SERVICE_TOKEN,
     githubWebhookSecret: env.GITHUB_WEBHOOK_SECRET,
     gitlabWebhookSecret: env.GITLAB_WEBHOOK_SECRET,
+    bitbucketWebhookSecret: env.BITBUCKET_WEBHOOK_SECRET,
     azureDevOpsWebhookSecret: env.AZURE_DEVOPS_WEBHOOK_SECRET,
     azureDevOpsOrganizationFallback: env.AZURE_DEVOPS_ORGANIZATION,
     azureDevOpsProjectFallback: env.AZURE_DEVOPS_PROJECT,

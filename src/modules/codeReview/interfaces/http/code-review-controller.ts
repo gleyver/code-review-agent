@@ -15,7 +15,7 @@ import {
 } from "./azure-devops-repo-url.js";
 import { splitBitbucketFullName } from "./bitbucket-full-name.js";
 import { parseBitbucketPullRequestWebhook } from "./bitbucket-pull-request-webhook-schema.js";
-import { isValidGitHubSignature } from "./github-webhook-signature.js";
+import { isValidBitbucketWebhookSignature, isValidGitHubWebhookSignature } from "./hub-webhook-hmac-sha256.js";
 import { parsePullRequestWebhook } from "./github-webhook-schema.js";
 import { parseGitlabMergeRequestWebhook } from "./gitlab-merge-request-webhook-schema.js";
 import { mapPipelinePayloadToReviewInput, parsePipelinePullRequestReview } from "./pipeline-pull-request-review.js";
@@ -39,6 +39,7 @@ type CodeReviewControllerDeps = {
   readonly reviewServiceToken: string | undefined;
   readonly githubWebhookSecret: string | undefined;
   readonly gitlabWebhookSecret: string | undefined;
+  readonly bitbucketWebhookSecret: string | undefined;
   readonly azureDevOpsWebhookSecret: string | undefined;
   readonly azureDevOpsOrganizationFallback: string | undefined;
   readonly azureDevOpsProjectFallback: string | undefined;
@@ -80,10 +81,15 @@ export class CodeReviewController {
       return;
     }
 
+    if (!this.deps.githubWebhookSecret?.trim()) {
+      this.respondWebhookSecretMissing(response, "GITHUB_WEBHOOK_SECRET");
+      return;
+    }
+
     const signature = request.header("x-hub-signature-256");
     const payloadBuffer = this.extractRawPayload(request);
 
-    if (!isValidGitHubSignature({ signature, payload: payloadBuffer, secret: this.deps.githubWebhookSecret })) {
+    if (!isValidGitHubWebhookSignature({ signature, payload: payloadBuffer, secret: this.deps.githubWebhookSecret })) {
       response.status(401).json({ message: "invalid webhook signature" });
       return;
     }
@@ -127,8 +133,13 @@ export class CodeReviewController {
       return;
     }
 
+    if (!this.deps.gitlabWebhookSecret?.trim()) {
+      this.respondWebhookSecretMissing(response, "GITLAB_WEBHOOK_SECRET");
+      return;
+    }
+
     const gitlabToken = request.header("x-gitlab-token");
-    if (this.deps.gitlabWebhookSecret && gitlabToken !== this.deps.gitlabWebhookSecret) {
+    if (gitlabToken !== this.deps.gitlabWebhookSecret) {
       response.status(401).json({ message: "invalid gitlab webhook token" });
       return;
     }
@@ -185,6 +196,24 @@ export class CodeReviewController {
       return;
     }
 
+    if (!this.deps.bitbucketWebhookSecret?.trim()) {
+      this.respondWebhookSecretMissing(response, "BITBUCKET_WEBHOOK_SECRET");
+      return;
+    }
+
+    const payloadBuffer = this.extractRawPayload(request);
+    if (
+      !isValidBitbucketWebhookSignature({
+        signature256: request.header("x-hub-signature-256"),
+        signature: request.header("x-hub-signature"),
+        payload: payloadBuffer,
+        secret: this.deps.bitbucketWebhookSecret
+      })
+    ) {
+      response.status(401).json({ message: "invalid webhook signature" });
+      return;
+    }
+
     const payload = this.parseJsonPayload(request, parseBitbucketPullRequestWebhook);
     if (!payload) {
       response.status(400).json({ message: "invalid payload" });
@@ -216,8 +245,13 @@ export class CodeReviewController {
       return;
     }
 
+    if (!this.deps.azureDevOpsWebhookSecret?.trim()) {
+      this.respondWebhookSecretMissing(response, "AZURE_DEVOPS_WEBHOOK_SECRET");
+      return;
+    }
+
     const azureToken = request.header("x-azure-webhook-token");
-    if (this.deps.azureDevOpsWebhookSecret && azureToken !== this.deps.azureDevOpsWebhookSecret) {
+    if (azureToken !== this.deps.azureDevOpsWebhookSecret) {
       response.status(401).json({ message: "invalid azure devops webhook token" });
       return;
     }
@@ -356,7 +390,12 @@ export class CodeReviewController {
           repository: output.repositoryLabel,
           pullRequestNumber: output.pullRequestNumber,
           headSha: output.headSha,
-          reviews: output.reviews
+          reviewAgents: output.reviews.map((r) => ({
+            agent: r.agent,
+            findingsCount: r.findings.length,
+            inlineFindingsCount: r.inlineFindings.length,
+            summaryChars: r.summary.length
+          }))
         },
         "pull request reviewed"
       );
@@ -389,6 +428,13 @@ export class CodeReviewController {
 
       response.status(500).json({ message: "review failed" });
     }
+  }
+
+  private respondWebhookSecretMissing(response: Response, envVarName: string): void {
+    response.status(503).json({
+      message: "webhook not configured",
+      detail: `Defina ${envVarName} no servidor para aceitar este webhook. Em desenvolvimento pode usar POST /reviews/pull-request com Authorization se REVIEW_SERVICE_TOKEN estiver definido.`
+    });
   }
 
   private parseJsonPayload<T>(request: Request, parser: (payload: unknown) => T): T | null {
