@@ -21,10 +21,10 @@ export class FoundryAgentInvocationRunner {
     readonly agentName: string;
     readonly agentVersion: string;
   }): Promise<AgentReviewResult> {
-    const openAIClient = this.projectClient.getOpenAIClient();
+    const foundryResponsesClient = this.projectClient.getOpenAIClient();
     const userContent = buildDiffUserPrompt(input.pullRequestDiff);
 
-    const conversation = await openAIClient.conversations.create({
+    const conversation = await foundryResponsesClient.conversations.create({
       items: [
         {
           role: "user",
@@ -43,7 +43,7 @@ export class FoundryAgentInvocationRunner {
         }
       };
 
-      const response = await openAIClient.responses.create(
+      const response = await foundryResponsesClient.responses.create(
         { conversation: conversation.id },
         { body: foundryBody }
       );
@@ -58,7 +58,7 @@ export class FoundryAgentInvocationRunner {
         inlineFindings: buildInlineFindingsForAgent(input.agent, payload.inlineFindingInputs)
       };
     } finally {
-      await openAIClient.conversations.delete(conversation.id).catch(() => undefined);
+      await foundryResponsesClient.conversations.delete(conversation.id).catch(() => undefined);
     }
   }
 }

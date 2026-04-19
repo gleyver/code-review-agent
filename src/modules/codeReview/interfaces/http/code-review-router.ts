@@ -17,8 +17,7 @@ import { GitLabMergeRequestDiffAdapter } from "../../infrastructure/gitlab/gitla
 import { GitLabMergeRequestReviewCommentAdapter } from "../../infrastructure/gitlab/gitlab-merge-request-review-comment-adapter.js";
 import { buildFoundryAgentBindingsFromEnv } from "../../infrastructure/agents/foundry-bindings.js";
 import { FoundryAgentInvocationRunner } from "../../infrastructure/agents/foundry-agent-invocation.js";
-import { HybridAgentReviewAdapter } from "../../infrastructure/agents/hybrid-agent-review-adapter.js";
-import { OpenAIAgentReviewAdapter } from "../../infrastructure/agents/openai-agent-review-adapter.js";
+import { FoundryAgentReviewAdapter } from "../../infrastructure/agents/foundry-agent-review-adapter.js";
 import { RunPullRequestReviewUseCase } from "../../application/use-cases/run-pull-request-review-use-case.js";
 import { CodeReviewController } from "./code-review-controller.js";
 import { deriveGitLabWebRootFromApiBase } from "./scm-webhook-pull-url.js";
@@ -39,18 +38,12 @@ export function buildCodeReviewRouter(): Router {
     bitbucketCommentAdapter,
     azureCommentAdapter
   );
-  const projectEndpoint = env.AZURE_AI_PROJECT_ENDPOINT?.trim();
+  const projectEndpoint = env.AZURE_AI_PROJECT_ENDPOINT.trim();
   const foundryCredential: TokenCredential = env.AZURE_AI_PROJECT_API_KEY?.trim()
     ? new AzureAiProjectApiKeyCredential(env.AZURE_AI_PROJECT_API_KEY.trim())
     : new DefaultAzureCredential();
-  const foundryRunner =
-    projectEndpoint ? new FoundryAgentInvocationRunner(new AIProjectClient(projectEndpoint, foundryCredential)) : null;
-  const openAiAdapter = new OpenAIAgentReviewAdapter(env.OPENAI_API_KEY ?? "", env.OPENAI_MODEL);
-  const agentAdapter = new HybridAgentReviewAdapter(
-    openAiAdapter,
-    foundryRunner,
-    buildFoundryAgentBindingsFromEnv(env)
-  );
+  const foundryRunner = new FoundryAgentInvocationRunner(new AIProjectClient(projectEndpoint, foundryCredential));
+  const agentAdapter = new FoundryAgentReviewAdapter(foundryRunner, buildFoundryAgentBindingsFromEnv(env));
   const useCase = new RunPullRequestReviewUseCase(diffAdapter, agentAdapter);
   const controller = new CodeReviewController({
     useCase,

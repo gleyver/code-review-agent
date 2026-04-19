@@ -1,6 +1,6 @@
 # Code Review Service
 
-Serviço HTTP em **Node.js** (Express) que, ao receber um **webhook** de **Pull Request / Merge Request** de **GitHub**, **GitLab**, **Bitbucket Cloud** ou **Azure DevOps**, ou uma chamada **`POST /reviews/pull-request`** (mesmo contrato para **pipelines** de qualquer provedor), busca o **diff** na API do SCM, executa **três revisões em paralelo** com LLM (performance, segurança, arquitetura) e devolve um JSON agregado. Opcionalmente publica **resumo** e **comentários inline** na PR/MR.
+Serviço HTTP em **Node.js** (Express) que, ao receber um **webhook** de **Pull Request / Merge Request** de **GitHub**, **GitLab**, **Bitbucket Cloud** ou **Azure DevOps**, ou uma chamada **`POST /reviews/pull-request`** (mesmo contrato para **pipelines** de qualquer provedor), busca o **diff** na API do SCM, executa **três revisões em paralelo** via **Microsoft Foundry** (agentes performance, segurança, arquitetura) e devolve um JSON agregado. Opcionalmente publica **resumo** e **comentários inline** na PR/MR.
 
 Arquitetura alinhada a **hexagonal + DDD**: domínio sem framework, casos de uso na aplicação, integrações SCM e LLM na infraestrutura, contratos HTTP na camada de interfaces.
 
@@ -21,7 +21,7 @@ Arquitetura alinhada a **hexagonal + DDD**: domínio sem framework, casos de uso
 - [Códigos HTTP e erros](#códigos-http-e-erros)
 - [Exemplos `curl`](#exemplos-curl)
 - [Tokens e permissões nos SCMs](#tokens-e-permissões-nos-scms)
-- [LLM: OpenAI e Microsoft Foundry](#llm-openai-e-microsoft-foundry)
+- [LLM: Microsoft Foundry](#llm-microsoft-foundry)
 - [Configurar webhooks nos provedores](#configurar-webhooks-nos-provedores)
 
 ---
@@ -29,7 +29,7 @@ Arquitetura alinhada a **hexagonal + DDD**: domínio sem framework, casos de uso
 ## Requisitos
 
 - **Node.js** `>= 20` (conforme `package.json` → `engines`)
-- Acesso de rede às APIs do SCM que você usar e ao provedor de LLM (OpenAI e/ou Azure)
+- Acesso de rede às APIs do SCM que você usar e ao **Microsoft Foundry** (Azure AI Projects)
 
 ---
 
@@ -41,7 +41,6 @@ Arquitetura alinhada a **hexagonal + DDD**: domínio sem framework, casos de uso
 | **Zod** | Validação de payload na borda (webhooks e `env`) |
 | **Pino** / **pino-http** | Logs estruturados |
 | **diff** | Manipulação de diff onde aplicável |
-| **OpenAI** (HTTP) | Agentes quando não há binding Foundry para o papel |
 | **@azure/ai-projects** + **@azure/identity** | Invocação de agentes no Microsoft Foundry |
 | **tsx** | Desenvolvimento com `watch` |
 | **TypeScript** | Build para `dist/` |
@@ -60,7 +59,7 @@ src/
   modules/codeReview/
     domain/              # Entidades, VOs, portas (diff, agentes, comentário PR)
     application/         # RunPullRequestReviewUseCase, utilitários de resumo/inline
-    infrastructure/      # Adapters SCM, composite, agentes (OpenAI, Foundry) em agents/
+    infrastructure/      # Adapters SCM, composite; agents/ (Microsoft Foundry) em agents/
     interfaces/http/     # Router, controller, schemas Zod por webhook, URLs derivadas
 ```
 
@@ -154,24 +153,19 @@ Valores padrão e comentários estão em **`.env.example`**. Copie para `.env` e
 | `POST_REVIEW_PR_COMMENT` | ligado (`true` se vazio) | `false` / `0` / `no` desliga publicação de comentários na PR/MR. |
 | `EXPOSE_REVIEW_ERROR_DETAIL` | `false` | `true` / `1` / `yes`: em erro `500` do review, inclui campo `detail` com a mensagem. **Evite em produção exposta.** |
 
-### OpenAI
-
-| Variável | Default | Descrição |
-|----------|---------|-----------|
-| `OPENAI_API_KEY` | — | Usada pelos agentes que **não** estiverem configurados no Foundry. |
-| `OPENAI_MODEL` | `gpt-4.1-mini` | Modelo chat usado pelo adapter OpenAI. |
-
 ### Microsoft Foundry (Azure AI Projects)
 
-| Variável | Descrição |
-|----------|-----------|
-| `AZURE_AI_PROJECT_ENDPOINT` | URL do projeto (obrigatória se qualquer `FOUNDRY_AGENT_*_NAME` estiver definido). |
-| `AZURE_AI_PROJECT_API_KEY` | Opcional; se vazio, usa `DefaultAzureCredential` (Azure CLI, Managed Identity, etc.). |
-| `FOUNDRY_AGENT_PERFORMANCE_NAME` / `FOUNDRY_AGENT_PERFORMANCE_VERSION` | Agente **performance** (nome + versão publicados no portal). |
-| `FOUNDRY_AGENT_SECURITY_NAME` / `FOUNDRY_AGENT_SECURITY_VERSION` | Agente **security**. |
-| `FOUNDRY_AGENT_ARCHITECTURE_NAME` / `FOUNDRY_AGENT_ARCHITECTURE_VERSION` | Agente **architecture**. |
+O serviço invoca **apenas** agentes publicados no Foundry via **`@azure/ai-projects`**. O **unified diff** é enviado como mensagem inicial da conversa; cada agente no portal deve devolver texto compatível com **`parseAgentOutput`** (o contrato JSON está descrito nos ficheiros **`performance-cr.md`**, **`security-cr.md`** e **`architecture-cr.md`** na raiz do repositório, úteis como referência de prompt/contrato ao configurar os agentes no Azure).
 
-Regra de validação: para cada papel, **nome e versão vêm juntos** ou ambos vazios. Pode **misturar** Foundry e OpenAI por papel.
+| Variável | Obrigatória | Descrição |
+|----------|-------------|-----------|
+| `AZURE_AI_PROJECT_ENDPOINT` | **Sim** | URL do projeto Azure AI / Foundry. |
+| `AZURE_AI_PROJECT_API_KEY` | Não | Se vazio, usa `DefaultAzureCredential` (Azure CLI, Managed Identity, etc.). |
+| `FOUNDRY_AGENT_PERFORMANCE_NAME` / `FOUNDRY_AGENT_PERFORMANCE_VERSION` | **Sim** | Agente **performance** (nome + versão na UI). |
+| `FOUNDRY_AGENT_SECURITY_NAME` / `FOUNDRY_AGENT_SECURITY_VERSION` | **Sim** | Agente **security**. |
+| `FOUNDRY_AGENT_ARCHITECTURE_NAME` / `FOUNDRY_AGENT_ARCHITECTURE_VERSION` | **Sim** | Agente **architecture**. |
+
+Validação: para cada papel, **nome e versão vêm juntos**; os três papéis devem estar configurados.
 
 ---
 
@@ -651,10 +645,10 @@ Se o token do provedor do webhook não estiver configurado, a rota tende a respo
 
 ---
 
-## LLM: OpenAI e Microsoft Foundry
+## LLM: Microsoft Foundry
 
-- Cada um dos três papéis (`performance`, `security`, `architecture`) é resolvido pelo **HybridAgentReviewAdapter**: se existir binding Foundry (nome + versão + endpoint), usa-se o agente no projeto Azure AI; caso contrário usa-se **OpenAI** com `OPENAI_API_KEY` e `OPENAI_MODEL`.
-- Se um papel não tiver Foundry **e** não houver chave OpenAI, a chamada desse agente falha com mensagem orientando a configurar chave ou Foundry.
+- **`FoundryAgentReviewAdapter`** delega cada papel ao **`FoundryAgentInvocationRunner`**, que usa `AIProjectClient` (`@azure/ai-projects`) para criar uma conversa com o diff e chamar o agente referenciado por nome e versão.
+- As variáveis `AZURE_AI_PROJECT_ENDPOINT` e os seis `FOUNDRY_AGENT_*` são **obrigatórias** ao iniciar o processo (validação em `env.ts`).
 
 ---
 
