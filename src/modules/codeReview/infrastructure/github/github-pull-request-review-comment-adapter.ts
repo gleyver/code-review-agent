@@ -1,3 +1,4 @@
+import { ServiceNotConfiguredError } from "../../domain/errors/service-not-configured-error.js";
 import type { PullRequestReviewCommentPort } from "../../domain/ports/pull-request-review-comment-port.js";
 import type { PullRequestRef } from "../../domain/value-objects/pull-request-ref.js";
 import type { ReviewInlineFinding } from "../../domain/value-objects/review-inline-finding.js";
@@ -18,7 +19,7 @@ export class GitHubPullRequestReviewCommentAdapter implements PullRequestReviewC
     }
 
     if (!this.githubToken.trim()) {
-      throw new Error("GITHUB_TOKEN is not configured");
+      throw new ServiceNotConfiguredError("GITHUB_TOKEN is not configured");
     }
 
     if (!input.headSha.trim()) {
@@ -63,7 +64,7 @@ export class GitHubPullRequestReviewCommentAdapter implements PullRequestReviewC
     }
 
     if (!this.githubToken.trim()) {
-      throw new Error("GITHUB_TOKEN is not configured");
+      throw new ServiceNotConfiguredError("GITHUB_TOKEN is not configured");
     }
 
     if (!input.headSha.trim()) {

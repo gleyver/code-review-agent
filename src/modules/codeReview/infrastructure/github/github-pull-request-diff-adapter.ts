@@ -1,4 +1,5 @@
 import type { PullRequestDiff } from "../../domain/ports/pull-request-diff-port.js";
+import { ServiceNotConfiguredError } from "../../domain/errors/service-not-configured-error.js";
 import type { PullRequestRef } from "../../domain/value-objects/pull-request-ref.js";
 
 type GitHubPullRequestResponse = {
@@ -13,7 +14,7 @@ export class GitHubPullRequestDiffAdapter {
 
   public async getDiffForGithub(ref: Extract<PullRequestRef, { provider: "github" }>): Promise<PullRequestDiff> {
     if (!this.githubToken.trim()) {
-      throw new Error("GITHUB_TOKEN is not configured");
+      throw new ServiceNotConfiguredError("GITHUB_TOKEN is not configured");
     }
 
     const [metadataResponse, diffResponse] = await Promise.all([

@@ -27,7 +27,7 @@ export class RunPullRequestReviewUseCase {
   ) {}
 
   public async execute(input: RunPullRequestReviewInput): Promise<RunPullRequestReviewOutput> {
-    PullRequestReviewRequest.create({
+    PullRequestReviewRequest.assertValid({
       repositoryLabel: input.repositoryLabel,
       pullRequestNumber: input.pullRequestNumber,
       pullRequestUrl: input.pullRequestUrl

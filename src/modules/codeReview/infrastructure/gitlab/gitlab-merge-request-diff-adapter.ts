@@ -1,3 +1,4 @@
+import { ServiceNotConfiguredError } from "../../domain/errors/service-not-configured-error.js";
 import type { PullRequestDiff } from "../../domain/ports/pull-request-diff-port.js";
 import type { PullRequestRef } from "../../domain/value-objects/pull-request-ref.js";
 
@@ -27,7 +28,7 @@ export class GitLabMergeRequestDiffAdapter {
 
   public async getDiffForGitlab(ref: Extract<PullRequestRef, { provider: "gitlab" }>): Promise<PullRequestDiff> {
     if (!this.gitlabToken.trim()) {
-      throw new Error("GITLAB_TOKEN is not configured");
+      throw new ServiceNotConfiguredError("GITLAB_TOKEN is not configured");
     }
 
     const project = encodeURIComponent(ref.projectId);

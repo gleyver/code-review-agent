@@ -1,3 +1,4 @@
+import { ServiceNotConfiguredError } from "../../domain/errors/service-not-configured-error.js";
 import type { PullRequestReviewCommentPort } from "../../domain/ports/pull-request-review-comment-port.js";
 import type { PullRequestRef } from "../../domain/value-objects/pull-request-ref.js";
 import type { ReviewInlineFinding } from "../../domain/value-objects/review-inline-finding.js";
@@ -29,7 +30,7 @@ export class GitLabMergeRequestReviewCommentAdapter implements PullRequestReview
     }
 
     if (!this.gitlabToken.trim()) {
-      throw new Error("GITLAB_TOKEN is not configured");
+      throw new ServiceNotConfiguredError("GITLAB_TOKEN is not configured");
     }
 
     const ref = input.pullRequestRef;
@@ -66,7 +67,7 @@ export class GitLabMergeRequestReviewCommentAdapter implements PullRequestReview
     }
 
     if (!this.gitlabToken.trim()) {
-      throw new Error("GITLAB_TOKEN is not configured");
+      throw new ServiceNotConfiguredError("GITLAB_TOKEN is not configured");
     }
 
     const ref = input.pullRequestRef;

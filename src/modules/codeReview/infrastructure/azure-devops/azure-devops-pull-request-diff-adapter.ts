@@ -1,3 +1,4 @@
+import { ServiceNotConfiguredError } from "../../domain/errors/service-not-configured-error.js";
 import type { PullRequestDiff } from "../../domain/ports/pull-request-diff-port.js";
 import type { PullRequestRef } from "../../domain/value-objects/pull-request-ref.js";
 import {
@@ -27,7 +28,7 @@ export class AzureDevOpsPullRequestDiffAdapter {
 
   public async getDiffForAzureDevOps(ref: Extract<PullRequestRef, { provider: "azure_devops" }>): Promise<PullRequestDiff> {
     if (!this.personalAccessToken.trim()) {
-      throw new Error("AZURE_DEVOPS_PAT is not configured");
+      throw new ServiceNotConfiguredError("AZURE_DEVOPS_PAT is not configured");
     }
 
     const base = this.buildCollectionUrl(ref.organization, ref.project);

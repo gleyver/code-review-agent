@@ -1,3 +1,4 @@
+import { ServiceNotConfiguredError } from "../../domain/errors/service-not-configured-error.js";
 import type { PullRequestReviewCommentPort } from "../../domain/ports/pull-request-review-comment-port.js";
 import type { PullRequestRef } from "../../domain/value-objects/pull-request-ref.js";
 import type { ReviewInlineFinding } from "../../domain/value-objects/review-inline-finding.js";
@@ -19,7 +20,7 @@ export class BitbucketPullRequestReviewCommentAdapter implements PullRequestRevi
     }
 
     if (!this.username.trim() || !this.appPassword.trim()) {
-      throw new Error("BITBUCKET_USERNAME and BITBUCKET_APP_PASSWORD are not configured");
+      throw new ServiceNotConfiguredError("BITBUCKET_USERNAME and BITBUCKET_APP_PASSWORD are not configured");
     }
 
     const ref = input.pullRequestRef;
@@ -56,7 +57,7 @@ export class BitbucketPullRequestReviewCommentAdapter implements PullRequestRevi
     }
 
     if (!this.username.trim() || !this.appPassword.trim()) {
-      throw new Error("BITBUCKET_USERNAME and BITBUCKET_APP_PASSWORD are not configured");
+      throw new ServiceNotConfiguredError("BITBUCKET_USERNAME and BITBUCKET_APP_PASSWORD are not configured");
     }
 
     const ref = input.pullRequestRef;

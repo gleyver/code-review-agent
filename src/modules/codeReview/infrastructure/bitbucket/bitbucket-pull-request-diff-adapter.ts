@@ -1,3 +1,4 @@
+import { ServiceNotConfiguredError } from "../../domain/errors/service-not-configured-error.js";
 import type { PullRequestDiff } from "../../domain/ports/pull-request-diff-port.js";
 import type { PullRequestRef } from "../../domain/value-objects/pull-request-ref.js";
 
@@ -23,7 +24,7 @@ export class BitbucketPullRequestDiffAdapter {
 
   public async getDiffForBitbucket(ref: Extract<PullRequestRef, { provider: "bitbucket" }>): Promise<PullRequestDiff> {
     if (!this.username.trim() || !this.appPassword.trim()) {
-      throw new Error("BITBUCKET_USERNAME and BITBUCKET_APP_PASSWORD are not configured");
+      throw new ServiceNotConfiguredError("BITBUCKET_USERNAME and BITBUCKET_APP_PASSWORD are not configured");
     }
 
     const base = `https://api.bitbucket.org/2.0/repositories/${encodeURIComponent(ref.workspace)}/${encodeURIComponent(ref.repoSlug)}`;

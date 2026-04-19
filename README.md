@@ -93,6 +93,7 @@ npm install
 | `npm run build` | Compila TypeScript para `dist/` |
 | `npm start` | Executa `node dist/server.js` (rode `build` antes) |
 | `npm run check` | `tsc --noEmit` (tipos apenas) |
+| `npm test` | Vitest: testes unitários (`src/**/*.test.ts`) |
 
 Por padrão o processo escuta em **`PORT`** (default `3000`). Exemplo: `http://localhost:3000`.
 
@@ -446,7 +447,7 @@ Eventos ignorados: **`202`** com JSON `{ "ignored": true, "reason": "..." }`.
 | `400` | JSON inválido ou regras de negócio na borda (ex.: Azure sem `repository.url`/`id` parseável). |
 | `401` | `REVIEW_SERVICE_TOKEN` incorreto/ausente, ou assinatura/token de webhook inválido. |
 | `500` | Falha no review. Com `EXPOSE_REVIEW_ERROR_DETAIL=true`, inclui `detail`. |
-| `503` | Token do SCM não configurado para aquele provedor (mensagem contém `not configured`). |
+| `503` | Webhook sem segredo configurado (`webhook not configured`) ou credencial SCM em falta: corpo com `code: "SERVICE_NOT_CONFIGURED"` e `message` descritiva. |
 
 ---
 
@@ -608,7 +609,7 @@ JSON
 - **Bitbucket**: App password com acesso ao repositório (leitura PR + escrita de comentários se quiser publicar o resumo).
 - **Azure DevOps**: PAT com **Code (Read)** no mínimo para diff; permissões adicionais para comentar threads no PR.
 
-Se o token do provedor do webhook não estiver configurado, a rota tende a responder **`503`** com mensagem contendo `not configured`.
+Se o PAT/token do SCM necessário para aquele `provider` não estiver configurado no servidor, o review responde **`503`** com `code: "SERVICE_NOT_CONFIGURED"`.
 
 ---
 

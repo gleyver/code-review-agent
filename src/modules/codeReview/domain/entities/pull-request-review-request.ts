@@ -4,10 +4,11 @@ type PullRequestReviewRequestProps = {
   readonly pullRequestUrl: string;
 };
 
+/** Invariantes do pedido de review antes de aceder ao SCM ou aos agentes. */
 export class PullRequestReviewRequest {
-  private constructor(private readonly props: PullRequestReviewRequestProps) {}
+  private constructor() {}
 
-  public static create(props: PullRequestReviewRequestProps): PullRequestReviewRequest {
+  public static assertValid(props: PullRequestReviewRequestProps): void {
     if (!props.repositoryLabel.trim()) {
       throw new Error("repositoryLabel is required");
     }
@@ -19,19 +20,5 @@ export class PullRequestReviewRequest {
     if (!props.pullRequestUrl.trim()) {
       throw new Error("pullRequestUrl is required");
     }
-
-    return new PullRequestReviewRequest(props);
-  }
-
-  public get repositoryLabel(): string {
-    return this.props.repositoryLabel;
-  }
-
-  public get pullRequestNumber(): number {
-    return this.props.pullRequestNumber;
-  }
-
-  public get pullRequestUrl(): string {
-    return this.props.pullRequestUrl;
   }
 }

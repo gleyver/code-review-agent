@@ -1,3 +1,4 @@
+import { ServiceNotConfiguredError } from "../../domain/errors/service-not-configured-error.js";
 import type { PullRequestReviewCommentPort } from "../../domain/ports/pull-request-review-comment-port.js";
 import type { PullRequestRef } from "../../domain/value-objects/pull-request-ref.js";
 import type { ReviewInlineFinding } from "../../domain/value-objects/review-inline-finding.js";
@@ -16,7 +17,7 @@ export class AzureDevOpsPullRequestReviewCommentAdapter implements PullRequestRe
     }
 
     if (!this.personalAccessToken.trim()) {
-      throw new Error("AZURE_DEVOPS_PAT is not configured");
+      throw new ServiceNotConfiguredError("AZURE_DEVOPS_PAT is not configured");
     }
 
     const ref = input.pullRequestRef;
@@ -61,7 +62,7 @@ export class AzureDevOpsPullRequestReviewCommentAdapter implements PullRequestRe
     }
 
     if (!this.personalAccessToken.trim()) {
-      throw new Error("AZURE_DEVOPS_PAT is not configured");
+      throw new ServiceNotConfiguredError("AZURE_DEVOPS_PAT is not configured");
     }
 
     const ref = input.pullRequestRef;
