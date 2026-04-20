@@ -15,7 +15,7 @@ import { GitHubPullRequestDiffAdapter } from "../../infrastructure/github/github
 import { GitHubPullRequestReviewCommentAdapter } from "../../infrastructure/github/github-pull-request-review-comment-adapter.js";
 import { GitLabMergeRequestDiffAdapter } from "../../infrastructure/gitlab/gitlab-merge-request-diff-adapter.js";
 import { GitLabMergeRequestReviewCommentAdapter } from "../../infrastructure/gitlab/gitlab-merge-request-review-comment-adapter.js";
-import { buildFoundryAgentBindingsFromEnv } from "../../infrastructure/agents/foundry-bindings.js";
+import { buildFoundryAgentMapFromSpecs, orderedAgentIds } from "../../infrastructure/agents/foundry-bindings.js";
 import { FoundryAgentInvocationRunner } from "../../infrastructure/agents/foundry-agent-invocation.js";
 import { FoundryAgentReviewAdapter } from "../../infrastructure/agents/foundry-agent-review-adapter.js";
 import { RunPullRequestReviewUseCase } from "../../application/use-cases/run-pull-request-review-use-case.js";
@@ -43,8 +43,10 @@ export function buildCodeReviewRouter(): Router {
     ? new AzureAiProjectApiKeyCredential(env.AZURE_AI_PROJECT_API_KEY.trim())
     : new DefaultAzureCredential();
   const foundryRunner = new FoundryAgentInvocationRunner(new AIProjectClient(projectEndpoint, foundryCredential));
-  const agentAdapter = new FoundryAgentReviewAdapter(foundryRunner, buildFoundryAgentBindingsFromEnv(env));
-  const useCase = new RunPullRequestReviewUseCase(diffAdapter, agentAdapter);
+  const foundryAgentMap = buildFoundryAgentMapFromSpecs(env.foundryAgents);
+  const agentIds = orderedAgentIds(env.foundryAgents);
+  const agentAdapter = new FoundryAgentReviewAdapter(foundryRunner, foundryAgentMap, agentIds);
+  const useCase = new RunPullRequestReviewUseCase(diffAdapter, agentAdapter, agentIds);
   const controller = new CodeReviewController({
     useCase,
     reviewCommentPort,

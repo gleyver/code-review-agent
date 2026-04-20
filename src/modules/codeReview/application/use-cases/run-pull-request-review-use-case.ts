@@ -1,7 +1,7 @@
-import { REVIEW_AGENT_TYPES, type ReviewAgentType } from "../../domain/value-objects/review-agent-type.js";
 import type { AgentReviewPort, AgentReviewResult } from "../../domain/ports/agent-review-port.js";
 import type { PullRequestDiffPort } from "../../domain/ports/pull-request-diff-port.js";
 import type { PullRequestRef } from "../../domain/value-objects/pull-request-ref.js";
+import type { ReviewAgentType } from "../../domain/value-objects/review-agent-type.js";
 import { PullRequestReviewRequest } from "../../domain/entities/pull-request-review-request.js";
 
 export type RunPullRequestReviewInput = {
@@ -23,7 +23,8 @@ export type RunPullRequestReviewOutput = {
 export class RunPullRequestReviewUseCase {
   public constructor(
     private readonly pullRequestDiffPort: PullRequestDiffPort,
-    private readonly agentReviewPort: AgentReviewPort
+    private readonly agentReviewPort: AgentReviewPort,
+    private readonly agentIds: readonly ReviewAgentType[]
   ) {}
 
   public async execute(input: RunPullRequestReviewInput): Promise<RunPullRequestReviewOutput> {
@@ -36,7 +37,7 @@ export class RunPullRequestReviewUseCase {
     const pullRequestDiff = await this.pullRequestDiffPort.getDiff(input.pullRequestRef);
 
     const reviews = await Promise.all(
-      REVIEW_AGENT_TYPES.map((agent) => this.executeAgent(agent, pullRequestDiff))
+      this.agentIds.map((agent) => this.executeAgent(agent, pullRequestDiff))
     );
 
     return {
@@ -49,7 +50,10 @@ export class RunPullRequestReviewUseCase {
     };
   }
 
-  private executeAgent(agent: ReviewAgentType, pullRequestDiff: Parameters<AgentReviewPort["runReview"]>[0]["pullRequestDiff"]) {
+  private executeAgent(
+    agent: ReviewAgentType,
+    pullRequestDiff: Parameters<AgentReviewPort["runReview"]>[0]["pullRequestDiff"]
+  ) {
     return this.agentReviewPort.runReview({ agent, pullRequestDiff });
   }
 }

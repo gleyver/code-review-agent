@@ -27,16 +27,17 @@ function makeAgentPort(results: AgentReviewResult[]): AgentReviewPort {
 }
 
 describe("RunPullRequestReviewUseCase", () => {
-  it("calls diff port once and agent port three times", async () => {
+  it("calls diff port once and agent port once per configured agent", async () => {
     const getDiff = vi.fn(async () => sampleDiff);
     const diffPort: PullRequestDiffPort = { getDiff };
+    const agentIds = ["performance", "security", "architecture"] as const;
     const agentResults: AgentReviewResult[] = [
       { agent: "performance", summary: "s", findings: [], inlineFindings: [] },
       { agent: "security", summary: "s", findings: [], inlineFindings: [] },
       { agent: "architecture", summary: "s", findings: [], inlineFindings: [] }
     ];
     const agentPort = makeAgentPort(agentResults);
-    const useCase = new RunPullRequestReviewUseCase(diffPort, agentPort);
+    const useCase = new RunPullRequestReviewUseCase(diffPort, agentPort, [...agentIds]);
 
     const output = await useCase.execute({
       pullRequestRef: { provider: "github", repositoryFullName: "o/r", pullRequestNumber: 1 },

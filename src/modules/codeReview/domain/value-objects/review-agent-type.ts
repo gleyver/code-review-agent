@@ -1,3 +1,5 @@
-export const REVIEW_AGENT_TYPES = ["performance", "security", "architecture"] as const;
-
-export type ReviewAgentType = (typeof REVIEW_AGENT_TYPES)[number];
+/**
+ * Identificador do agente de review (vem de FOUNDRY_AGENTS_JSON / ficheiro de config).
+ * Ex.: performance, security, docs, acessibilidade.
+ */
+export type ReviewAgentType = string;

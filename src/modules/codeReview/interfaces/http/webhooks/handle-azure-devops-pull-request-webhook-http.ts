@@ -19,15 +19,12 @@ export async function handleAzureDevOpsPullRequestWebhookHttp(
   }
 
   const adoSecret = toolkit.deps.azureDevOpsWebhookSecret?.trim();
-  if (!adoSecret) {
-    toolkit.respondWebhookSecretMissing(response, "AZURE_DEVOPS_WEBHOOK_SECRET");
-    return;
-  }
-
-  const azureToken = request.header("x-azure-webhook-token");
-  if (!timingSafeStringEqual(adoSecret, azureToken)) {
-    response.status(401).json({ message: "invalid azure devops webhook token" });
-    return;
+  if (adoSecret) {
+    const azureToken = request.header("x-azure-webhook-token");
+    if (!timingSafeStringEqual(adoSecret, azureToken)) {
+      response.status(401).json({ message: "invalid azure devops webhook token" });
+      return;
+    }
   }
 
   const payload = toolkit.parseJsonPayload(request, parseAzureDevOpsPullRequestWebhook);

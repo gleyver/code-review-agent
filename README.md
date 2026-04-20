@@ -71,7 +71,7 @@ O router monta as rotas **na raiz** do app (sem prefixo `/api`): por exemplo `PO
 
 1. **Autenticação opcional**: se `REVIEW_SERVICE_TOKEN` estiver definido, as rotas `POST /webhooks/*` e **`POST /reviews/pull-request`** exigem `Authorization: Bearer <token>`.
 2. **Filtro por provedor** (somente webhooks): cabeçalhos e campos do JSON definem se o evento é aceito ou **ignorado** (`202`). O endpoint de **pipeline** não usa esses cabeçalhos; o corpo traz `provider` e identificadores da PR/MR.
-3. **Segredos de webhook** (obrigatórios em `POST /webhooks/*`): sem a variável de ambiente correspondente o servidor responde **`503`** (`webhook not configured`). GitHub: `GITHUB_WEBHOOK_SECRET` + `x-hub-signature-256`. GitLab: `GITLAB_WEBHOOK_SECRET` + `x-gitlab-token`. Bitbucket: `BITBUCKET_WEBHOOK_SECRET` + `x-hub-signature` ou `x-hub-signature-256` (HMAC SHA256 do corpo bruto). Azure DevOps: `AZURE_DEVOPS_WEBHOOK_SECRET` + `x-azure-webhook-token`.
+3. **Segredos de webhook**: em `POST /webhooks/github|gitlab|bitbucket`, sem a variável correspondente o servidor responde **`503`** (`webhook not configured`). No Azure DevOps (`POST /webhooks/azure-devops`), o segredo `AZURE_DEVOPS_WEBHOOK_SECRET` fica **opcional por enquanto**; se definido, o header `x-azure-webhook-token` precisa casar exatamente.
 4. **Parse e validação Zod** do corpo; em falha → `400`.
 5. **Caso de uso**: obtém diff + `headSha` via adapter do SCM; em seguida chama os três agentes em **paralelo** (`Promise.all`).
 6. **Resposta `200`**: JSON com reviews, `headSha`, etc.
@@ -144,7 +144,7 @@ Valores padrão e comentários estão em **`.env.example`**. Copie para `.env` e
 | Variável | Descrição |
 |----------|-----------|
 | `AZURE_DEVOPS_PAT` | PAT com permissões de leitura de código/repositório e para comentar no PR. |
-| `AZURE_DEVOPS_WEBHOOK_SECRET` | **Obrigatório** para `POST /webhooks/azure-devops`: cabeçalho `x-azure-webhook-token` idêntico. |
+| `AZURE_DEVOPS_WEBHOOK_SECRET` | **Opcional (temporário)** para `POST /webhooks/azure-devops`: se definido, o Azure **não emite** este valor — você define um segredo forte, coloca no `.env` e envia o **mesmo** texto no cabeçalho `x-azure-webhook-token` (ver [Azure DevOps: service hook e segredo](#azure-devops-service-hook-e-segredo)). |
 | `AZURE_DEVOPS_ORGANIZATION` | Fallback de organização se a URL do repositório no payload não trouxer org. |
 | `AZURE_DEVOPS_PROJECT` | Fallback de projeto. |
 
@@ -157,17 +157,30 @@ Valores padrão e comentários estão em **`.env.example`**. Copie para `.env` e
 
 ### Microsoft Foundry (Azure AI Projects)
 
-O serviço invoca **apenas** agentes publicados no Foundry via **`@azure/ai-projects`**. O **unified diff** é enviado como mensagem inicial da conversa; cada agente no portal deve devolver texto compatível com **`parseAgentOutput`** (o contrato JSON está descrito nos ficheiros **`performance-cr.md`**, **`security-cr.md`** e **`architecture-cr.md`** na raiz do repositório, úteis como referência de prompt/contrato ao configurar os agentes no Azure).
+O serviço invoca **apenas** agentes publicados no Foundry via **`@azure/ai-projects`**. O **unified diff** é enviado como mensagem inicial da conversa; cada agente no portal deve devolver texto compatível com **`parseAgentOutput`** (referência de contrato nos ficheiros **`*-cr.md`** na raiz do repositório).
 
 | Variável | Obrigatória | Descrição |
 |----------|-------------|-----------|
 | `AZURE_AI_PROJECT_ENDPOINT` | **Sim** | URL do projeto Azure AI / Foundry. |
 | `AZURE_AI_PROJECT_API_KEY` | Não | Se vazio, usa `DefaultAzureCredential` (Azure CLI, Managed Identity, etc.). |
-| `FOUNDRY_AGENT_PERFORMANCE_NAME` / `FOUNDRY_AGENT_PERFORMANCE_VERSION` | **Sim** | Agente **performance** (nome + versão na UI). |
-| `FOUNDRY_AGENT_SECURITY_NAME` / `FOUNDRY_AGENT_SECURITY_VERSION` | **Sim** | Agente **security**. |
-| `FOUNDRY_AGENT_ARCHITECTURE_NAME` / `FOUNDRY_AGENT_ARCHITECTURE_VERSION` | **Sim** | Agente **architecture**. |
+| `FOUNDRY_AGENTS_CONFIG_PATH` | Uma das duas | Caminho para ficheiro JSON com a lista de agentes (ver abaixo). **Não** use em conjunto com `FOUNDRY_AGENTS_JSON`. |
+| `FOUNDRY_AGENTS_JSON` | Uma das duas | String JSON com o mesmo conteúdo do ficheiro. Útil para ambientes que só aceitam variáveis de ambiente. |
 
-Validação: para cada papel, **nome e versão vêm juntos**; os três papéis devem estar configurados.
+**Formato do JSON** (array, ordem = ordem das revisões em paralelo):
+
+```json
+[
+  { "id": "performance", "foundryName": "performance-cr", "foundryVersion": "1" },
+  { "id": "security", "foundryName": "security-cr", "foundryVersion": "1" }
+]
+```
+
+- **`id`**: identificador estável no output da API e nos comentários (letras, números, `_`, `-`).
+- **`foundryName` / `foundryVersion`**: nome e versão publicados no portal Foundry.
+
+Exemplo em ficheiro: **`foundry-agents.example.json`** na raiz do repositório. Para adicionar um agente novo, **edite só o JSON** (ou o ConfigMap) e reinicie o serviço — sem alterar código.
+
+Validação: **pelo menos um** agente; `id` únicos (comparação case-insensitive); JSON bem formado.
 
 ---
 
@@ -401,7 +414,7 @@ Sem link HTML, usa-se `https://bitbucket.org/{full_name}/pull-requests/{id}`.
 
 | Cabeçalho | Valor esperado |
 |-----------|----------------|
-| `x-azure-webhook-token` | Deve ser igual a `AZURE_DEVOPS_WEBHOOK_SECRET`. |
+| `x-azure-webhook-token` | Se `AZURE_DEVOPS_WEBHOOK_SECRET` estiver definido, deve ser **exatamente** igual a ele (segredo escolhido por você; configurar no Service Hook conforme a secção [Azure DevOps: service hook e segredo](#azure-devops-service-hook-e-segredo)). |
 | `Authorization` | Bearer, se token de serviço configurado. |
 
 **JSON**:
@@ -447,7 +460,7 @@ Eventos ignorados: **`202`** com JSON `{ "ignored": true, "reason": "..." }`.
 | `400` | JSON inválido ou regras de negócio na borda (ex.: Azure sem `repository.url`/`id` parseável). |
 | `401` | `REVIEW_SERVICE_TOKEN` incorreto/ausente, ou assinatura/token de webhook inválido. |
 | `500` | Falha no review. Com `EXPOSE_REVIEW_ERROR_DETAIL=true`, inclui `detail`. |
-| `503` | Webhook sem segredo configurado (`webhook not configured`) ou credencial SCM em falta: corpo com `code: "SERVICE_NOT_CONFIGURED"` e `message` descritiva. |
+| `503` | Webhook sem segredo configurado (`webhook not configured`) **nos provedores que exigem segredo** (GitHub/GitLab/Bitbucket), ou credencial SCM em falta: corpo com `code: "SERVICE_NOT_CONFIGURED"` e `message` descritiva. |
 
 ---
 
@@ -579,6 +592,8 @@ curl -sS -X POST "$BASE/webhooks/bitbucket" \
 
 ### Azure DevOps
 
+Se `AZURE_DEVOPS_WEBHOOK_SECRET` estiver definido no servidor, substitua `SEU_AZURE_DEVOPS_WEBHOOK_SECRET` pelo **mesmo** valor (ex.: saída de `openssl rand -hex 32`). Se não estiver definido, este cabeçalho é opcional.
+
 ```bash
 BASE=http://localhost:3000
 AUTH=()
@@ -616,7 +631,7 @@ Se o PAT/token do SCM necessário para aquele `provider` não estiver configurad
 ## LLM: Microsoft Foundry
 
 - **`FoundryAgentReviewAdapter`** delega cada papel ao **`FoundryAgentInvocationRunner`**, que usa `AIProjectClient` (`@azure/ai-projects`) para criar uma conversa com o diff e chamar o agente referenciado por nome e versão.
-- As variáveis `AZURE_AI_PROJECT_ENDPOINT` e os seis `FOUNDRY_AGENT_*` são **obrigatórias** ao iniciar o processo (validação em `env.ts`).
+- `AZURE_AI_PROJECT_ENDPOINT` e **`FOUNDRY_AGENTS_JSON` ou `FOUNDRY_AGENTS_CONFIG_PATH`** são **obrigatórios** ao iniciar o processo (validação em `env.ts`).
 
 ---
 
@@ -629,6 +644,18 @@ Se o PAT/token do SCM necessário para aquele `provider` não estiver configurad
 | Bitbucket | Repository settings → Webhooks | `https://<seu-host>/webhooks/bitbucket` — **Pull request: Created** |
 | Azure DevOps | Project → Service hooks | `https://<seu-host>/webhooks/azure-devops` — código Git, **Pull request created** |
 
+### Azure DevOps: service hook e segredo
+
+1. **(Opcional por enquanto) Gerar o segredo** (exemplo): `openssl rand -hex 32` — guarde o resultado em `.env` como `AZURE_DEVOPS_WEBHOOK_SECRET=...`.
+2. **No Azure DevOps**: **Project settings** → **Service hooks** → **Create subscription**.
+3. **Integração**: escolha **Web Hooks** (POST JSON para a URL configurada). **Filtro de eventos**: **Code** → **Pull request created** (ou equivalente na sua língua/UI).
+4. **URL**: `https://<seu-host>/webhooks/azure-devops`.
+5. **Cabeçalho**: se decidir usar segredo e a subscrição permitir **HTTP headers** / **additional headers**, adicione **nome** `x-azure-webhook-token` e **valor** idêntico ao de `AZURE_DEVOPS_WEBHOOK_SECRET`.
+
+Documentação oficial do tipo de integração: [Webhooks with Azure DevOps](https://learn.microsoft.com/en-us/azure/devops/service-hooks/services/webhooks?view=azure-devops).
+
+Se a UI **não** permitir cabeçalho HTTP customizado no webhook, use **`POST /reviews/pull-request`** a partir de um pipeline (com `REVIEW_SERVICE_TOKEN` no servidor e o mesmo token no job), em vez do Service Hook HTTP com `x-azure-webhook-token`.
+
 Em pipelines CI que não repassem o payload nativo, você pode disparar os mesmos `POST` com JSON no formato validado pelos schemas deste repositório (como nos exemplos `curl`).
 
 ---
@@ -636,5 +663,5 @@ Em pipelines CI que não repassem o payload nativo, você pode disparar os mesmo
 ## Segurança em produção
 
 - Defina **`REVIEW_SERVICE_TOKEN`** se o endpoint for exposto à internet.
-- Configure os **segredos de webhook** por provedor (sem eles, `POST /webhooks/*` responde **503**).
+- Configure os **segredos de webhook** por provedor; no estado atual, GitHub/GitLab/Bitbucket exigem segredo e Azure DevOps aceita sem segredo temporariamente.
 - Mantenha **`EXPOSE_REVIEW_ERROR_DETAIL`** desligado em ambientes públicos para não vazar mensagens de erro internas.

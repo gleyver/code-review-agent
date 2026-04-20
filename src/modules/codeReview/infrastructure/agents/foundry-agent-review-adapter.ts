@@ -7,19 +7,26 @@ import type { FoundryAgentBinding } from "./foundry-bindings.js";
 export class FoundryAgentReviewAdapter implements AgentReviewPort {
   public constructor(
     private readonly foundryRunner: FoundryAgentInvocationRunner,
-    private readonly foundryAgents: Record<ReviewAgentType, FoundryAgentBinding>
+    private readonly foundryAgents: ReadonlyMap<string, FoundryAgentBinding>,
+    private readonly agentOrder: readonly string[]
   ) {}
 
   public async runReview(input: {
     readonly agent: ReviewAgentType;
     readonly pullRequestDiff: PullRequestDiff;
   }): Promise<AgentReviewResult> {
-    const foundryBinding = this.foundryAgents[input.agent];
+    const binding = this.foundryAgents.get(input.agent);
+    if (!binding) {
+      throw new Error(
+        `Agente "${input.agent}" nao existe na configuracao Foundry. IDs configurados: ${this.agentOrder.join(", ")}`
+      );
+    }
+
     return this.foundryRunner.runReviewWithFoundryAgent({
       agent: input.agent,
       pullRequestDiff: input.pullRequestDiff,
-      agentName: foundryBinding.name,
-      agentVersion: foundryBinding.version
+      agentName: binding.name,
+      agentVersion: binding.version
     });
   }
 }

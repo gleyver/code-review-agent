@@ -1,0 +1,17 @@
+[
+  {
+    "id": "performance",
+    "foundryName": "performance-cr",
+    "foundryVersion": "4"
+  },
+  {
+    "id": "security",
+    "foundryName": "security-cr",
+    "foundryVersion": "3"
+  },
+  {
+    "id": "architecture",
+    "foundryName": "architecture-cr",
+    "foundryVersion": "5"
+  }
+]
